@@ -20,9 +20,20 @@
 package org.apache.iceberg.rest;
 
 import java.io.IOException;
+import java.io.UncheckedIOException;
+import java.util.Collections;
 import java.util.List;
 import java.util.Map;
+import java.util.Optional;
 import java.util.function.Consumer;
+import java.util.function.Function;
+import java.util.stream.Collectors;
+import javax.servlet.ServletException;
+import javax.servlet.http.HttpServlet;
+import javax.servlet.http.HttpServletRequest;
+import javax.servlet.http.HttpServletResponse;
+import org.apache.hc.core5.http.ContentType;
+import org.apache.hc.core5.http.HttpHeaders;
 import org.apache.iceberg.catalog.Catalog;
 import org.apache.iceberg.catalog.Namespace;
 import org.apache.iceberg.catalog.SupportsNamespaces;
@@ -47,9 +58,17 @@ import org.apache.iceberg.rest.requests.RenameTableRequest;
 import org.apache.iceberg.rest.requests.UpdateNamespacePropertiesRequest;
 import org.apache.iceberg.rest.requests.UpdateTableRequest;
 import org.apache.iceberg.rest.responses.ConfigResponse;
+import org.apache.iceberg.rest.responses.CreateNamespaceResponse;
 import org.apache.iceberg.rest.responses.ErrorResponse;
+import org.apache.iceberg.rest.responses.GetNamespaceResponse;
+import org.apache.iceberg.rest.responses.ListNamespacesResponse;
+import org.apache.iceberg.rest.responses.ListTablesResponse;
+import org.apache.iceberg.rest.responses.LoadTableResponse;
 import org.apache.iceberg.rest.responses.OAuthTokenResponse;
+import org.apache.iceberg.rest.responses.UpdateNamespacePropertiesResponse;
 import org.apache.iceberg.util.Pair;
+
+import static java.lang.String.format;
 
 /**
  * Adaptor class to translate REST requests into {@link Catalog} API calls.
@@ -91,25 +110,34 @@ public class RESTCatalogAdapter implements RESTClient {
 
   private enum Route {
     TOKENS(HTTPMethod.POST, "v1/oauth/tokens"),
-    CONFIG(HTTPMethod.GET, "v1/config"),
-    LIST_NAMESPACES(HTTPMethod.GET, "v1/namespaces"),
-    CREATE_NAMESPACE(HTTPMethod.POST, "v1/namespaces"),
-    LOAD_NAMESPACE(HTTPMethod.GET, "v1/namespaces/{namespace}"),
+    CONFIG(HTTPMethod.GET, "v1/config", null, ConfigResponse.class),
+    LIST_NAMESPACES(HTTPMethod.GET, "v1/namespaces", null, ListNamespacesResponse.class),
+    CREATE_NAMESPACE(HTTPMethod.POST, "v1/namespaces", CreateNamespaceRequest.class, CreateNamespaceResponse.class),
+    LOAD_NAMESPACE(HTTPMethod.GET, "v1/namespaces/{namespace}", null, GetNamespaceResponse.class),
     DROP_NAMESPACE(HTTPMethod.DELETE, "v1/namespaces/{namespace}"),
-    UPDATE_NAMESPACE(HTTPMethod.POST, "v1/namespaces/{namespace}/properties"),
-    LIST_TABLES(HTTPMethod.GET, "v1/namespaces/{namespace}/tables"),
-    CREATE_TABLE(HTTPMethod.POST, "v1/namespaces/{namespace}/tables"),
-    LOAD_TABLE(HTTPMethod.GET, "v1/namespaces/{namespace}/tables/{table}"),
-    UPDATE_TABLE(HTTPMethod.POST, "v1/namespaces/{namespace}/tables/{table}"),
+    UPDATE_NAMESPACE(HTTPMethod.POST, "v1/namespaces/{namespace}/properties", UpdateNamespacePropertiesRequest.class,
+        UpdateNamespacePropertiesResponse.class),
+    LIST_TABLES(HTTPMethod.GET, "v1/namespaces/{namespace}/tables", null, ListTablesResponse.class),
+    CREATE_TABLE(HTTPMethod.POST, "v1/namespaces/{namespace}/tables", CreateTableRequest.class,
+        LoadTableResponse.class),
+    LOAD_TABLE(HTTPMethod.GET, "v1/namespaces/{namespace}/tables/{table}", null, LoadTableResponse.class),
+    UPDATE_TABLE(HTTPMethod.POST, "v1/namespaces/{namespace}/tables/{table}", UpdateTableRequest.class,
+        LoadTableResponse.class),
     DROP_TABLE(HTTPMethod.DELETE, "v1/namespaces/{namespace}/tables/{table}"),
-    RENAME_TABLE(HTTPMethod.POST, "v1/tables/rename");
+    RENAME_TABLE(HTTPMethod.POST, "v1/tables/rename", RenameTableRequest.class, null);
 
     private final HTTPMethod method;
     private final int requriedLength;
     private final Map<Integer, String> requirements;
     private final Map<Integer, String> variables;
+    private Class<? extends RESTRequest> requestClass;
+    private Class<? extends RESTResponse> responseClass;
 
     Route(HTTPMethod method, String pattern) {
+      this(method, pattern, null, null);
+    }
+
+    Route(HTTPMethod method, String pattern, Class<? extends RESTRequest> requestClass, Class<? extends RESTResponse> responseClass) {
       this.method = method;
 
       // parse the pattern into requirements and variables
@@ -124,6 +152,9 @@ public class RESTCatalogAdapter implements RESTClient {
           requirementsBuilder.put(pos, part);
         }
       }
+
+      this.requestClass = requestClass;
+      this.responseClass = responseClass;
 
       this.requriedLength = parts.size();
       this.requirements = requirementsBuilder.build();
@@ -140,6 +171,14 @@ public class RESTCatalogAdapter implements RESTClient {
       ImmutableMap.Builder<String, String> vars = ImmutableMap.builder();
       variables.forEach((key, value) -> vars.put(value, requestPath.get(key)));
       return vars.build();
+    }
+
+    public Class<? extends RESTRequest> getRequestClass() {
+      return requestClass;
+    }
+
+    public Class<? extends RESTResponse> getResponseClass() {
+      return responseClass;
     }
 
     public static Pair<Route, Map<String, String>> from(HTTPMethod method, String path) {
@@ -171,7 +210,7 @@ public class RESTCatalogAdapter implements RESTClient {
 
           case "urn:ietf:params:oauth:grant-type:token-exchange":
             String actor = request.get("actor_token");
-            String token = String.format(
+            String token = format(
                 "token-exchange-token:sub=%s%s",
                 request.get("subject_token"),
                 actor != null ? ",act=" + actor : "");
@@ -300,7 +339,7 @@ public class RESTCatalogAdapter implements RESTClient {
       errorBuilder
           .responseCode(400)
           .withType("BadRequestException")
-          .withMessage(String.format("No route for request: %s %s", method, path));
+          .withMessage(format("No route for request: %s %s", method, path));
     }
 
     ErrorResponse error = errorBuilder.build();
@@ -348,13 +387,13 @@ public class RESTCatalogAdapter implements RESTClient {
 
   private static class BadResponseType extends RuntimeException {
     private BadResponseType(Class<?> responseType, Object response) {
-      super(String.format("Invalid response object, not a %s: %s", responseType.getName(), response));
+      super(format("Invalid response object, not a %s: %s", responseType.getName(), response));
     }
   }
 
   private static class BadRequestType extends RuntimeException {
     private BadRequestType(Class<?> requestType, Object request) {
-      super(String.format("Invalid request object, not a %s: %s", requestType.getName(), request));
+      super(format("Invalid request object, not a %s: %s", requestType.getName(), request));
     }
   }
 
@@ -388,5 +427,155 @@ public class RESTCatalogAdapter implements RESTClient {
 
   private static TableIdentifier identFromPathVars(Map<String, String> pathVars) {
     return TableIdentifier.of(namespaceFromPathVars(pathVars), RESTUtil.decodeString(pathVars.get("table")));
+  }
+
+  public HttpServlet servlet() {
+    return new AdaptorServlet();
+  }
+
+  public class AdaptorServlet extends HttpServlet {
+    private final Map<String, String> responseHeaders = ImmutableMap.of(
+        HttpHeaders.CONTENT_TYPE, ContentType.APPLICATION_JSON.getMimeType());
+
+    @Override
+    protected void doGet(HttpServletRequest request, HttpServletResponse response) throws ServletException, IOException {
+      execute(ServletRequestContext.from(request), response);
+    }
+
+    @Override
+    protected void doHead(HttpServletRequest request, HttpServletResponse response) throws ServletException, IOException {
+      execute(ServletRequestContext.from(request), response);
+    }
+
+    @Override
+    protected void doPost(HttpServletRequest request, HttpServletResponse response) throws ServletException, IOException {
+      execute(ServletRequestContext.from(request), response);
+    }
+
+    @Override
+    protected void doDelete(HttpServletRequest request, HttpServletResponse response) throws ServletException, IOException {
+      execute(ServletRequestContext.from(request), response);
+    }
+
+    private void execute(ServletRequestContext context, HttpServletResponse response) throws IOException {
+      responseHeaders.forEach(response::setHeader);
+
+      if (context.error().isPresent()) {
+        response.setStatus(HttpServletResponse.SC_BAD_REQUEST);
+        RESTObjectMapper.mapper().writeValue(response.getWriter(), context.error().get());
+        return;
+      }
+
+      Object responseBody = RESTCatalogAdapter.this.execute(
+          context.method(),
+          context.path(),
+          context.queryParams(),
+          context.body(),
+          context.route().getResponseClass(),
+          context.headers(),
+          handle(response));
+
+      if (responseBody != null) {
+        RESTObjectMapper.mapper().writeValue(response.getWriter(), responseBody);
+      }
+
+      response.setStatus(HttpServletResponse.SC_OK);
+    }
+
+    private Consumer<ErrorResponse> handle(HttpServletResponse response) {
+      return (errorResponse) -> {
+        response.setStatus(errorResponse.code());
+        try {
+          RESTObjectMapper.mapper().writeValue(response.getWriter(), errorResponse);
+        } catch (IOException e) {
+          throw new UncheckedIOException(e);
+        }
+      };
+    }
+  }
+
+  private static class ServletRequestContext {
+    private HTTPMethod method;
+    private Route route;
+    private String path;
+    private Map<String, String> headers;
+    private Map<String, String> queryParams;
+    private RESTRequest body;
+
+    private ErrorResponse errorResponse;
+
+    private ServletRequestContext(ErrorResponse errorResponse) {
+      this.errorResponse = errorResponse;
+    }
+
+    private ServletRequestContext(
+        HTTPMethod method,
+        Route route,
+        String path,
+        Map<String, String> headers,
+        Map<String, String> queryParams,
+        RESTRequest body) {
+      this.method = method;
+      this.route = route;
+      this.path = path;
+      this.headers = headers;
+      this.queryParams = queryParams;
+      this.body = body;
+    }
+
+    static ServletRequestContext from(HttpServletRequest request) throws IOException {
+      HTTPMethod method = HTTPMethod.valueOf(request.getMethod().toUpperCase());
+      String path = request.getRequestURI();
+      Pair<Route, Map<String, String>> routeContext = Route.from(method, path);
+
+      if (routeContext == null) {
+        return new ServletRequestContext(ErrorResponse.builder()
+            .responseCode(400)
+            .withType("BadRequestException")
+            .withMessage(format("No route for request: %s %s", method, path))
+            .build());
+      }
+
+      Route route = routeContext.first();
+      Map<String, String> queryParams = request.getParameterMap().entrySet().stream()
+          .collect(Collectors.toMap(Map.Entry::getKey, e -> e.getValue()[0]));
+      Map<String, String> headers = Collections.list(request.getHeaderNames()).stream()
+          .collect(Collectors.toMap(Function.identity(), request::getHeader));
+
+      RESTRequest requestBody =
+          route.getRequestClass() != null
+          ? RESTObjectMapper.mapper().readValue(request.getInputStream(), route.getRequestClass())
+          : null;
+
+      return new ServletRequestContext(method, route, path, headers, queryParams, requestBody);
+    }
+
+    public HTTPMethod method() {
+      return method;
+    }
+
+    public Route route() {
+      return route;
+    }
+
+    public String path() {
+      return path;
+    }
+
+    public Map<String, String> headers() {
+      return headers;
+    }
+
+    public Map<String, String> queryParams() {
+      return queryParams;
+    }
+
+    public RESTRequest body() {
+      return body;
+    }
+
+    public Optional<ErrorResponse> error() {
+      return Optional.ofNullable(errorResponse);
+    }
   }
 }
