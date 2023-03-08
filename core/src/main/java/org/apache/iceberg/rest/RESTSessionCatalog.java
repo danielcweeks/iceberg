@@ -176,7 +176,7 @@ public class RESTSessionCatalog extends BaseSessionCatalog
     this.client = clientBuilder.apply(mergedProps);
     this.paths = ResourcePaths.forCatalogProperties(mergedProps);
 
-    String token = mergedProps.get(OAuth2Properties.TOKEN);
+    String token = mergedProps.getOrDefault(OAuth2Properties.TOKEN, initToken);
     this.catalogAuth = new AuthSession(baseHeaders, null, null, credential, scope);
     if (authResponse != null) {
       this.catalogAuth =
