@@ -147,7 +147,8 @@ public abstract class S3V4RestSignerClient
     return httpClient;
   }
 
-  private AuthSession authSession() {
+  @Value.Lazy
+  AuthSession authSession() {
     String token = token().get();
     if (null != token) {
       return AuthSession.fromAccessToken(
