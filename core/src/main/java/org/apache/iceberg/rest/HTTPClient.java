@@ -28,6 +28,8 @@ import java.nio.charset.StandardCharsets;
 import java.util.Map;
 import java.util.function.Consumer;
 import java.util.stream.Collectors;
+
+import org.apache.hc.client5.http.classic.ExecChainHandler;
 import org.apache.hc.client5.http.classic.methods.HttpUriRequest;
 import org.apache.hc.client5.http.classic.methods.HttpUriRequestBase;
 import org.apache.hc.client5.http.impl.classic.CloseableHttpClient;
@@ -63,6 +65,9 @@ import org.slf4j.LoggerFactory;
 public class HTTPClient implements RESTClient {
 
   private static final Logger LOG = LoggerFactory.getLogger(HTTPClient.class);
+  private static final String LAMBDA_ENABLED = "rest.lambda-enabled";
+  private static final String LAMBDA_EXEC_HANDLER_IMPL =
+          "org.apache.iceberg.aws.lambda.rest.LambdaRESTExecutionHandler";
   private static final String SIGV4_ENABLED = "rest.sigv4-enabled";
   private static final String SIGV4_REQUEST_INTERCEPTOR_IMPL =
       "org.apache.iceberg.aws.RESTSigV4Signer";
@@ -76,10 +81,11 @@ public class HTTPClient implements RESTClient {
   private final ObjectMapper mapper;
 
   private HTTPClient(
-      String uri,
-      Map<String, String> baseHeaders,
-      ObjectMapper objectMapper,
-      HttpRequestInterceptor requestInterceptor) {
+          String uri,
+          Map<String, String> baseHeaders,
+          ObjectMapper objectMapper,
+          HttpRequestInterceptor requestInterceptor,
+          ExecChainHandler execChainHandler) {
     this.uri = uri;
     this.mapper = objectMapper;
 
@@ -94,6 +100,10 @@ public class HTTPClient implements RESTClient {
 
     if (requestInterceptor != null) {
       clientBuilder.addRequestInterceptorLast(requestInterceptor);
+    }
+
+    if (execChainHandler != null) {
+      clientBuilder.addExecInterceptorLast("aws-lambda", execChainHandler);
     }
 
     this.httpClient = clientBuilder.build();
@@ -387,21 +397,21 @@ public class HTTPClient implements RESTClient {
   }
 
   @VisibleForTesting
-  static HttpRequestInterceptor loadInterceptorDynamically(
-      String impl, Map<String, String> properties) {
-    HttpRequestInterceptor instance;
+  static <T> T loadDynamically(
+      String impl, Map<String, String> properties, Class<T> clazz) {
+    T instance;
 
-    DynConstructors.Ctor<HttpRequestInterceptor> ctor;
+    DynConstructors.Ctor<T> ctor;
     try {
       ctor =
-          DynConstructors.builder(HttpRequestInterceptor.class)
+          DynConstructors.builder(clazz)
               .loader(HTTPClient.class.getClassLoader())
               .impl(impl)
               .buildChecked();
     } catch (NoSuchMethodException e) {
       throw new IllegalArgumentException(
           String.format(
-              "Cannot initialize RequestInterceptor, missing no-arg constructor: %s", impl),
+              "Cannot initialize class, missing no-arg constructor: %s", impl),
           e);
     }
 
@@ -409,7 +419,7 @@ public class HTTPClient implements RESTClient {
       instance = ctor.newInstance();
     } catch (ClassCastException e) {
       throw new IllegalArgumentException(
-          String.format("Cannot initialize, %s does not implement RequestInterceptor", impl), e);
+          String.format("Cannot initialize, %s does not implement class", impl), e);
     }
 
     DynMethods.builder("initialize")
@@ -463,10 +473,16 @@ public class HTTPClient implements RESTClient {
       HttpRequestInterceptor interceptor = null;
 
       if (PropertyUtil.propertyAsBoolean(properties, SIGV4_ENABLED, false)) {
-        interceptor = loadInterceptorDynamically(SIGV4_REQUEST_INTERCEPTOR_IMPL, properties);
+        interceptor = loadDynamically(SIGV4_REQUEST_INTERCEPTOR_IMPL, properties, HttpRequestInterceptor.class);
       }
 
-      return new HTTPClient(uri, baseHeaders, mapper, interceptor);
+      ExecChainHandler execChainHandler = null;
+
+      if (PropertyUtil.propertyAsBoolean(properties, LAMBDA_ENABLED, false)) {
+        execChainHandler = loadDynamically(LAMBDA_EXEC_HANDLER_IMPL, properties, ExecChainHandler.class);
+      }
+
+      return new HTTPClient(uri, baseHeaders, mapper, interceptor, execChainHandler);
     }
   }
 
