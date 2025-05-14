@@ -18,6 +18,9 @@
  */
 package org.apache.iceberg;
 
+import static org.apache.iceberg.TableProperties.DEFAULT_FILE_FORMAT;
+import static org.apache.iceberg.TableProperties.DEFAULT_FILE_FORMAT_DEFAULT;
+
 import java.io.Serializable;
 import java.util.Collection;
 import java.util.List;
@@ -62,6 +65,8 @@ public class TableMetadata implements Serializable {
   static final int INITIAL_ROW_ID = 0;
 
   private static final long ONE_MINUTE = TimeUnit.MINUTES.toMillis(1);
+
+  static Set<FileFormat> V3_SUPPORTED_FILE_FORMATS = Set.of(FileFormat.PARQUET);
 
   public static TableMetadata newTableMetadata(
       Schema schema,
@@ -1553,6 +1558,8 @@ public class TableMetadata implements Serializable {
           "Cannot set metadata location with changes to table metadata: %s changes",
           changes.size());
 
+      validateFileFormatCompatibility(formatVersion, properties);
+
       Schema schema = schemasById.get(currentSchemaId);
       PartitionSpec.checkCompatibility(specsById.get(defaultSpecId), schema);
       SortOrder.checkCompatibility(sortOrdersById.get(defaultSortOrderId), schema);
@@ -1906,6 +1913,24 @@ public class TableMetadata implements Serializable {
 
     private <U extends MetadataUpdate> Stream<U> changes(Class<U> updateClass) {
       return changes.stream().filter(updateClass::isInstance).map(updateClass::cast);
+    }
+
+    /**
+     * Parquet is currently the only format compatible with v3 due to missing support for features
+     * like default values, type support, etc. in other formats which make creating or updating to
+     * v3 unsafe. Supported formats should be expanded as support is implemented.
+     */
+    private void validateFileFormatCompatibility(
+        int formatVersion, Map<String, String> properties) {
+      FileFormat targetFormat =
+          FileFormat.fromString(
+              properties.getOrDefault(DEFAULT_FILE_FORMAT, DEFAULT_FILE_FORMAT_DEFAULT));
+
+      Preconditions.checkArgument(
+          V3_SUPPORTED_FILE_FORMATS.contains(targetFormat) || formatVersion <= 2,
+          "%s file format is not supported in table format version v%s",
+          targetFormat,
+          formatVersion);
     }
   }
 }
