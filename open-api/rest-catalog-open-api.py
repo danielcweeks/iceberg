@@ -21,7 +21,7 @@ from datetime import date, timedelta
 from typing import Literal
 from uuid import UUID
 
-from pydantic import Base64Str, BaseModel, ConfigDict, Field, RootModel
+from pydantic import BaseModel, Extra, Field
 
 
 class ErrorModel(BaseModel):
@@ -33,10 +33,10 @@ class ErrorModel(BaseModel):
     type: str = Field(
         ...,
         description='Internal type definition of the error',
-        examples=['NoSuchNamespaceException'],
+        example='NoSuchNamespaceException',
     )
     code: int = Field(
-        ..., description='HTTP response code', examples=[404], ge=400, le=600
+        ..., description='HTTP response code', example=404, ge=400, le=600
     )
     stack: list[str] | None = None
 
@@ -57,45 +57,43 @@ class CatalogConfig(BaseModel):
     endpoints: list[str] | None = Field(
         None,
         description='A list of endpoints that the server supports. The format of each endpoint must be "<HTTP verb> <resource path from OpenAPI REST spec>". The HTTP verb and the resource path must be separated by a space character.',
-        examples=[
-            [
-                'GET /v1/{prefix}/namespaces/{namespace}',
-                'GET /v1/{prefix}/namespaces',
-                'POST /v1/{prefix}/namespaces',
-                'GET /v1/{prefix}/namespaces/{namespace}/tables/{table}',
-                'GET /v1/{prefix}/namespaces/{namespace}/views/{view}',
-            ]
+        example=[
+            'GET /v1/{prefix}/namespaces/{namespace}',
+            'GET /v1/{prefix}/namespaces',
+            'POST /v1/{prefix}/namespaces',
+            'GET /v1/{prefix}/namespaces/{namespace}/tables/{table}',
+            'GET /v1/{prefix}/namespaces/{namespace}/views/{view}',
         ],
     )
     idempotency_key_lifetime: timedelta | None = Field(
         None,
         alias='idempotency-key-lifetime',
         description='Client reuse window for an Idempotency-Key (ISO-8601 duration, e.g., PT30M, PT24H). Interpreted as the maximum time from the first submission using a key to the last retry during which a client may reuse that key. Servers SHOULD accept retries for at least this duration and MAY include a grace period to account for delays/clock skew. Clients SHOULD NOT reuse an Idempotency-Key after this window elapses; they SHOULD generate a new key for any subsequent attempt. Presence of this field indicates the server supports Idempotency-Key semantics for mutation endpoints. If absent, clients MUST assume idempotency is not supported.',
-        examples=['PT30M'],
+        example='PT30M',
     )
 
 
 class UpdateNamespacePropertiesRequest(BaseModel):
-    removals: list[str] | None = Field(None, examples=[['department', 'access_group']])
-    updates: dict[str, str] | None = Field(
-        None, examples=[{'owner': 'Hank Bendickson'}]
+    removals: list[str] | None = Field(
+        None, example=['department', 'access_group'], unique_items=True
     )
+    updates: dict[str, str] | None = Field(None, example={'owner': 'Hank Bendickson'})
 
 
-class Namespace(RootModel[list[str]]):
+class Namespace(BaseModel):
     """
     Reference to one or more levels of a namespace
     """
 
-    root: list[str] = Field(
+    __root__: list[str] = Field(
         ...,
         description='Reference to one or more levels of a namespace',
-        examples=[['accounting', 'tax']],
+        example=['accounting', 'tax'],
     )
 
 
-class PageToken(RootModel[str | None]):
-    root: str | None = Field(
+class PageToken(BaseModel):
+    __root__: str | None = Field(
         None,
         description='An opaque token that allows clients to make use of pagination for list APIs (e.g. ListTables). Clients may initiate the first paginated request by sending an empty query parameter `pageToken` to the server.\nServers that support pagination should identify the `pageToken` parameter and return a `next-page-token` in the response if there are more results available.  After the initial request, the value of `next-page-token` from each response must be used as the `pageToken` parameter value for the next request. The server must return `null` value for the `next-page-token` in the last response.\nServers that support pagination must return all results in a single response with the value of `next-page-token` set to `null` if the query parameter `pageToken` is not set in the request.\nServers that do not support pagination should ignore the `pageToken` parameter and return all results in a single response. The `next-page-token` must be omitted from the response.\nClients must interpret either `null` or missing response value of `next-page-token` as the end of the listing results.',
     )
@@ -106,106 +104,60 @@ class TableIdentifier(BaseModel):
     name: str
 
 
-class PrimitiveType(RootModel[str]):
-    root: str = Field(..., examples=[['long', 'string', 'fixed[16]', 'decimal(10,2)']])
+class PrimitiveType(BaseModel):
+    __root__: str = Field(..., example=['long', 'string', 'fixed[16]', 'decimal(10,2)'])
 
 
-class ExpressionType(RootModel[str]):
-    root: str = Field(
+class ExpressionType(BaseModel):
+    __root__: str = Field(
         ...,
-        examples=[
-            [
-                'true',
-                'false',
-                'eq',
-                'and',
-                'or',
-                'not',
-                'in',
-                'not-in',
-                'lt',
-                'lt-eq',
-                'gt',
-                'gt-eq',
-                'not-eq',
-                'starts-with',
-                'not-starts-with',
-                'is-null',
-                'not-null',
-                'is-nan',
-                'not-nan',
-            ]
+        example=[
+            'true',
+            'false',
+            'eq',
+            'and',
+            'or',
+            'not',
+            'in',
+            'not-in',
+            'lt',
+            'lt-eq',
+            'gt',
+            'gt-eq',
+            'not-eq',
+            'starts-with',
+            'not-starts-with',
+            'is-null',
+            'not-null',
+            'is-nan',
+            'not-nan',
         ],
     )
 
 
 class TrueExpression(BaseModel):
-    type: Literal['true'] = Field(
-        ...,
-        examples=[
-            [
-                'true',
-                'false',
-                'eq',
-                'and',
-                'or',
-                'not',
-                'in',
-                'not-in',
-                'lt',
-                'lt-eq',
-                'gt',
-                'gt-eq',
-                'not-eq',
-                'starts-with',
-                'not-starts-with',
-                'is-null',
-                'not-null',
-                'is-nan',
-                'not-nan',
-            ]
-        ],
-    )
+    type: Literal['true'] = Field('true', const=True)
 
 
 class FalseExpression(BaseModel):
-    type: Literal['false'] = Field(
+    type: Literal['false'] = Field('false', const=True)
+
+
+class Reference(BaseModel):
+    __root__: str = Field(..., example=['column-name'])
+
+
+class Transform(BaseModel):
+    __root__: str = Field(
         ...,
-        examples=[
-            [
-                'true',
-                'false',
-                'eq',
-                'and',
-                'or',
-                'not',
-                'in',
-                'not-in',
-                'lt',
-                'lt-eq',
-                'gt',
-                'gt-eq',
-                'not-eq',
-                'starts-with',
-                'not-starts-with',
-                'is-null',
-                'not-null',
-                'is-nan',
-                'not-nan',
-            ]
-        ],
-    )
-
-
-class Reference(RootModel[str]):
-    root: str = Field(..., examples=[['column-name']])
-
-
-class Transform(RootModel[str]):
-    root: str = Field(
-        ...,
-        examples=[
-            ['identity', 'year', 'month', 'day', 'hour', 'bucket[256]', 'truncate[16]']
+        example=[
+            'identity',
+            'year',
+            'month',
+            'day',
+            'hour',
+            'bucket[256]',
+            'truncate[16]',
         ],
     )
 
@@ -222,12 +174,12 @@ class PartitionSpec(BaseModel):
     fields: list[PartitionField]
 
 
-class SortDirection(RootModel[Literal['asc', 'desc']]):
-    root: Literal['asc', 'desc']
+class SortDirection(BaseModel):
+    __root__: Literal['asc', 'desc']
 
 
-class NullOrder(RootModel[Literal['nulls-first', 'nulls-last']]):
-    root: Literal['nulls-first', 'nulls-last']
+class NullOrder(BaseModel):
+    __root__: Literal['nulls-first', 'nulls-last']
 
 
 class SortField(BaseModel):
@@ -244,7 +196,7 @@ class SortOrder(BaseModel):
 
 class EncryptedKey(BaseModel):
     key_id: str = Field(..., alias='key-id')
-    encrypted_key_metadata: Base64Str = Field(..., alias='encrypted-key-metadata')
+    encrypted_key_metadata: str = Field(..., alias='encrypted-key-metadata')
     encrypted_by_id: str | None = Field(None, alias='encrypted-by-id')
     properties: dict[str, str] | None = None
 
@@ -285,8 +237,8 @@ class SnapshotReference(BaseModel):
     min_snapshots_to_keep: int | None = Field(None, alias='min-snapshots-to-keep')
 
 
-class SnapshotReferences(RootModel[dict[str, SnapshotReference]]):
-    root: dict[str, SnapshotReference]
+class SnapshotReferences(BaseModel):
+    __root__: dict[str, SnapshotReference]
 
 
 class SnapshotLogItem(BaseModel):
@@ -294,8 +246,8 @@ class SnapshotLogItem(BaseModel):
     timestamp_ms: int = Field(..., alias='timestamp-ms')
 
 
-class SnapshotLog(RootModel[list[SnapshotLogItem]]):
-    root: list[SnapshotLogItem]
+class SnapshotLog(BaseModel):
+    __root__: list[SnapshotLogItem]
 
 
 class MetadataLogItem(BaseModel):
@@ -303,8 +255,8 @@ class MetadataLogItem(BaseModel):
     timestamp_ms: int = Field(..., alias='timestamp-ms')
 
 
-class MetadataLog(RootModel[list[MetadataLogItem]]):
-    root: list[MetadataLogItem]
+class MetadataLog(BaseModel):
+    __root__: list[MetadataLogItem]
 
 
 class SQLViewRepresentation(BaseModel):
@@ -313,8 +265,8 @@ class SQLViewRepresentation(BaseModel):
     dialect: str
 
 
-class ViewRepresentation(RootModel[SQLViewRepresentation]):
-    root: SQLViewRepresentation
+class ViewRepresentation(BaseModel):
+    __root__: SQLViewRepresentation
 
 
 class ViewHistoryEntry(BaseModel):
@@ -345,17 +297,19 @@ class AssignUUIDUpdate(BaseUpdate):
     Assigning a UUID to a table/view should only be done when creating the table/view. It is not safe to re-assign the UUID if a table/view already has a UUID assigned
     """
 
-    action: Literal['assign-uuid'] = 'assign-uuid'
+    action: Literal['assign-uuid'] = Field('assign-uuid', const=True)
     uuid: str
 
 
 class UpgradeFormatVersionUpdate(BaseUpdate):
-    action: Literal['upgrade-format-version'] = 'upgrade-format-version'
+    action: Literal['upgrade-format-version'] = Field(
+        'upgrade-format-version', const=True
+    )
     format_version: int = Field(..., alias='format-version')
 
 
 class SetCurrentSchemaUpdate(BaseUpdate):
-    action: Literal['set-current-schema'] = 'set-current-schema'
+    action: Literal['set-current-schema'] = Field('set-current-schema', const=True)
     schema_id: int = Field(
         ...,
         alias='schema-id',
@@ -364,12 +318,12 @@ class SetCurrentSchemaUpdate(BaseUpdate):
 
 
 class AddPartitionSpecUpdate(BaseUpdate):
-    action: Literal['add-spec'] = 'add-spec'
+    action: Literal['add-spec'] = Field('add-spec', const=True)
     spec: PartitionSpec
 
 
 class SetDefaultSpecUpdate(BaseUpdate):
-    action: Literal['set-default-spec'] = 'set-default-spec'
+    action: Literal['set-default-spec'] = Field('set-default-spec', const=True)
     spec_id: int = Field(
         ...,
         alias='spec-id',
@@ -378,12 +332,14 @@ class SetDefaultSpecUpdate(BaseUpdate):
 
 
 class AddSortOrderUpdate(BaseUpdate):
-    action: Literal['add-sort-order'] = 'add-sort-order'
+    action: Literal['add-sort-order'] = Field('add-sort-order', const=True)
     sort_order: SortOrder = Field(..., alias='sort-order')
 
 
 class SetDefaultSortOrderUpdate(BaseUpdate):
-    action: Literal['set-default-sort-order'] = 'set-default-sort-order'
+    action: Literal['set-default-sort-order'] = Field(
+        'set-default-sort-order', const=True
+    )
     sort_order_id: int = Field(
         ...,
         alias='sort-order-id',
@@ -392,47 +348,49 @@ class SetDefaultSortOrderUpdate(BaseUpdate):
 
 
 class AddSnapshotUpdate(BaseUpdate):
-    action: Literal['add-snapshot'] = 'add-snapshot'
+    action: Literal['add-snapshot'] = Field('add-snapshot', const=True)
     snapshot: Snapshot
 
 
 class SetSnapshotRefUpdate(BaseUpdate, SnapshotReference):
-    action: Literal['set-snapshot-ref'] = 'set-snapshot-ref'
+    action: Literal['set-snapshot-ref'] = Field('set-snapshot-ref', const=True)
     ref_name: str = Field(..., alias='ref-name')
 
 
 class RemoveSnapshotsUpdate(BaseUpdate):
-    action: Literal['remove-snapshots'] = 'remove-snapshots'
+    action: Literal['remove-snapshots'] = Field('remove-snapshots', const=True)
     snapshot_ids: list[int] = Field(..., alias='snapshot-ids')
 
 
 class RemoveSnapshotRefUpdate(BaseUpdate):
-    action: Literal['remove-snapshot-ref'] = 'remove-snapshot-ref'
+    action: Literal['remove-snapshot-ref'] = Field('remove-snapshot-ref', const=True)
     ref_name: str = Field(..., alias='ref-name')
 
 
 class SetLocationUpdate(BaseUpdate):
-    action: Literal['set-location'] = 'set-location'
+    action: Literal['set-location'] = Field('set-location', const=True)
     location: str
 
 
 class SetPropertiesUpdate(BaseUpdate):
-    action: Literal['set-properties'] = 'set-properties'
+    action: Literal['set-properties'] = Field('set-properties', const=True)
     updates: dict[str, str]
 
 
 class RemovePropertiesUpdate(BaseUpdate):
-    action: Literal['remove-properties'] = 'remove-properties'
+    action: Literal['remove-properties'] = Field('remove-properties', const=True)
     removals: list[str]
 
 
 class AddViewVersionUpdate(BaseUpdate):
-    action: Literal['add-view-version'] = 'add-view-version'
+    action: Literal['add-view-version'] = Field('add-view-version', const=True)
     view_version: ViewVersion = Field(..., alias='view-version')
 
 
 class SetCurrentViewVersionUpdate(BaseUpdate):
-    action: Literal['set-current-view-version'] = 'set-current-view-version'
+    action: Literal['set-current-view-version'] = Field(
+        'set-current-view-version', const=True
+    )
     view_version_id: int = Field(
         ...,
         alias='view-version-id',
@@ -441,32 +399,38 @@ class SetCurrentViewVersionUpdate(BaseUpdate):
 
 
 class RemoveStatisticsUpdate(BaseUpdate):
-    action: Literal['remove-statistics'] = 'remove-statistics'
+    action: Literal['remove-statistics'] = Field('remove-statistics', const=True)
     snapshot_id: int = Field(..., alias='snapshot-id')
 
 
 class RemovePartitionStatisticsUpdate(BaseUpdate):
-    action: Literal['remove-partition-statistics'] = 'remove-partition-statistics'
+    action: Literal['remove-partition-statistics'] = Field(
+        'remove-partition-statistics', const=True
+    )
     snapshot_id: int = Field(..., alias='snapshot-id')
 
 
 class RemovePartitionSpecsUpdate(BaseUpdate):
-    action: Literal['remove-partition-specs'] = 'remove-partition-specs'
+    action: Literal['remove-partition-specs'] = Field(
+        'remove-partition-specs', const=True
+    )
     spec_ids: list[int] = Field(..., alias='spec-ids')
 
 
 class RemoveSchemasUpdate(BaseUpdate):
-    action: Literal['remove-schemas'] = 'remove-schemas'
+    action: Literal['remove-schemas'] = Field('remove-schemas', const=True)
     schema_ids: list[int] = Field(..., alias='schema-ids')
 
 
 class AddEncryptionKeyUpdate(BaseUpdate):
-    action: Literal['add-encryption-key'] = 'add-encryption-key'
+    action: Literal['add-encryption-key'] = Field('add-encryption-key', const=True)
     encryption_key: EncryptedKey = Field(..., alias='encryption-key')
 
 
 class RemoveEncryptionKeyUpdate(BaseUpdate):
-    action: Literal['remove-encryption-key'] = 'remove-encryption-key'
+    action: Literal['remove-encryption-key'] = Field(
+        'remove-encryption-key', const=True
+    )
     key_id: str = Field(..., alias='key-id')
 
 
@@ -479,7 +443,7 @@ class AssertCreate(TableRequirement):
     The table must not already exist; used for create transactions
     """
 
-    type: Literal['assert-create']
+    type: Literal['assert-create'] = Field(..., const=True)
 
 
 class AssertTableUUID(TableRequirement):
@@ -487,7 +451,7 @@ class AssertTableUUID(TableRequirement):
     The table UUID must match the requirement's `uuid`
     """
 
-    type: Literal['assert-table-uuid']
+    type: Literal['assert-table-uuid'] = Field(..., const=True)
     uuid: str
 
 
@@ -499,7 +463,9 @@ class AssertRefSnapshotId(TableRequirement):
 
     """
 
-    type: Literal['assert-ref-snapshot-id'] = 'assert-ref-snapshot-id'
+    type: Literal['assert-ref-snapshot-id'] = Field(
+        'assert-ref-snapshot-id', const=True
+    )
     ref: str
     snapshot_id: int = Field(..., alias='snapshot-id')
 
@@ -509,7 +475,9 @@ class AssertLastAssignedFieldId(TableRequirement):
     The table's last assigned column id must match the requirement's `last-assigned-field-id`
     """
 
-    type: Literal['assert-last-assigned-field-id'] = 'assert-last-assigned-field-id'
+    type: Literal['assert-last-assigned-field-id'] = Field(
+        'assert-last-assigned-field-id', const=True
+    )
     last_assigned_field_id: int = Field(..., alias='last-assigned-field-id')
 
 
@@ -518,7 +486,9 @@ class AssertCurrentSchemaId(TableRequirement):
     The table's current schema id must match the requirement's `current-schema-id`
     """
 
-    type: Literal['assert-current-schema-id'] = 'assert-current-schema-id'
+    type: Literal['assert-current-schema-id'] = Field(
+        'assert-current-schema-id', const=True
+    )
     current_schema_id: int = Field(..., alias='current-schema-id')
 
 
@@ -527,8 +497,8 @@ class AssertLastAssignedPartitionId(TableRequirement):
     The table's last assigned partition id must match the requirement's `last-assigned-partition-id`
     """
 
-    type: Literal['assert-last-assigned-partition-id'] = (
-        'assert-last-assigned-partition-id'
+    type: Literal['assert-last-assigned-partition-id'] = Field(
+        'assert-last-assigned-partition-id', const=True
     )
     last_assigned_partition_id: int = Field(..., alias='last-assigned-partition-id')
 
@@ -538,7 +508,9 @@ class AssertDefaultSpecId(TableRequirement):
     The table's default spec id must match the requirement's `default-spec-id`
     """
 
-    type: Literal['assert-default-spec-id'] = 'assert-default-spec-id'
+    type: Literal['assert-default-spec-id'] = Field(
+        'assert-default-spec-id', const=True
+    )
     default_spec_id: int = Field(..., alias='default-spec-id')
 
 
@@ -547,7 +519,9 @@ class AssertDefaultSortOrderId(TableRequirement):
     The table's default sort order id must match the requirement's `default-sort-order-id`
     """
 
-    type: Literal['assert-default-sort-order-id'] = 'assert-default-sort-order-id'
+    type: Literal['assert-default-sort-order-id'] = Field(
+        'assert-default-sort-order-id', const=True
+    )
     default_sort_order_id: int = Field(..., alias='default-sort-order-id')
 
 
@@ -556,7 +530,7 @@ class AssertViewUUID(BaseModel):
     The view UUID must match the requirement's `uuid`
     """
 
-    type: Literal['assert-view-uuid']
+    type: Literal['assert-view-uuid'] = Field('assert-view-uuid', const=True)
     uuid: str
 
 
@@ -575,9 +549,7 @@ class LoadCredentialsResponse(BaseModel):
 
 
 class AsyncPlanningResult(BaseModel):
-    status: Literal['submitted'] = Field(
-        ..., description='Status of a server-side planning operation'
-    )
+    status: Literal['submitted'] = Field(..., const=True)
     plan_id: str = Field(
         ..., alias='plan-id', description='ID used to track a planning request'
     )
@@ -588,13 +560,11 @@ class EmptyPlanningResult(BaseModel):
     Empty server-side planning result
     """
 
-    status: Literal['cancelled'] = Field(
-        ..., description='Status of a server-side planning operation'
-    )
+    status: Literal['cancelled']
 
 
-class PlanStatus(RootModel[Literal['completed', 'submitted', 'cancelled', 'failed']]):
-    root: Literal['completed', 'submitted', 'cancelled', 'failed'] = Field(
+class PlanStatus(BaseModel):
+    __root__: Literal['completed', 'submitted', 'cancelled', 'failed'] = Field(
         ..., description='Status of a server-side planning operation'
     )
 
@@ -613,19 +583,8 @@ class RegisterViewRequest(BaseModel):
     metadata_location: str = Field(..., alias='metadata-location')
 
 
-class TokenType(
-    RootModel[
-        Literal[
-            'urn:ietf:params:oauth:token-type:access_token',
-            'urn:ietf:params:oauth:token-type:refresh_token',
-            'urn:ietf:params:oauth:token-type:id_token',
-            'urn:ietf:params:oauth:token-type:saml1',
-            'urn:ietf:params:oauth:token-type:saml2',
-            'urn:ietf:params:oauth:token-type:jwt',
-        ]
-    ]
-):
-    root: Literal[
+class TokenType(BaseModel):
+    __root__: Literal[
         'urn:ietf:params:oauth:token-type:access_token',
         'urn:ietf:params:oauth:token-type:refresh_token',
         'urn:ietf:params:oauth:token-type:id_token',
@@ -681,10 +640,8 @@ class OAuthTokenExchangeRequest(BaseModel):
     actor_token_type: TokenType | None = None
 
 
-class OAuthTokenRequest(
-    RootModel[OAuthClientCredentialsRequest | OAuthTokenExchangeRequest]
-):
-    root: OAuthClientCredentialsRequest | OAuthTokenExchangeRequest = Field(
+class OAuthTokenRequest(BaseModel):
+    __root__: OAuthClientCredentialsRequest | OAuthTokenExchangeRequest = Field(
         ...,
         deprecated=True,
         description='The `oauth/tokens` endpoint and related schemas are **DEPRECATED for REMOVAL** from this spec, see description of the endpoint.',
@@ -702,12 +659,12 @@ class TimerResult(BaseModel):
     total_duration: int = Field(..., alias='total-duration')
 
 
-class MetricResult(RootModel[CounterResult | TimerResult]):
-    root: CounterResult | TimerResult
+class MetricResult(BaseModel):
+    __root__: CounterResult | TimerResult
 
 
-class Metrics(RootModel[dict[str, MetricResult]]):
-    root: dict[str, MetricResult]
+class Metrics(BaseModel):
+    __root__: dict[str, MetricResult]
 
 
 class CommitReport(BaseModel):
@@ -766,9 +723,9 @@ class IcebergErrorResponse(BaseModel):
     JSON wrapper for all error responses (non-2xx)
     """
 
-    model_config = ConfigDict(
-        extra='forbid',
-    )
+    class Config:
+        extra = Extra.forbid
+
     error: ErrorModel
 
 
@@ -777,7 +734,7 @@ class CreateNamespaceResponse(BaseModel):
     properties: dict[str, str] | None = Field(
         {},
         description='Properties stored on the namespace, if supported by the server.',
-        examples=[{'owner': 'Ralph', 'created_at': '1452120468'}],
+        example={'owner': 'Ralph', 'created_at': '1452120468'},
     )
 
 
@@ -786,23 +743,25 @@ class GetNamespaceResponse(BaseModel):
     properties: dict[str, str] | None = Field(
         {},
         description='Properties stored on the namespace, if supported by the server. If the server does not support namespace properties, it should return null for this field. If namespace properties are supported, but none are set, it should return an empty object.',
-        examples=[{'owner': 'Ralph', 'transient_lastDdlTime': '1452120468'}],
+        example={'owner': 'Ralph', 'transient_lastDdlTime': '1452120468'},
     )
 
 
 class ListTablesResponse(BaseModel):
     next_page_token: PageToken | None = Field(None, alias='next-page-token')
-    identifiers: list[TableIdentifier] | None = None
+    identifiers: list[TableIdentifier] | None = Field(None, unique_items=True)
 
 
 class ListNamespacesResponse(BaseModel):
     next_page_token: PageToken | None = Field(None, alias='next-page-token')
-    namespaces: list[Namespace] | None = None
+    namespaces: list[Namespace] | None = Field(None, unique_items=True)
 
 
 class UpdateNamespacePropertiesResponse(BaseModel):
     updated: list[str] = Field(
-        ..., description='List of property keys that were added or updated'
+        ...,
+        description='List of property keys that were added or updated',
+        unique_items=True,
     )
     removed: list[str] = Field(..., description='List of properties that were removed')
     missing: list[str] | None = Field(
@@ -825,110 +784,110 @@ class PartitionStatisticsFile(BaseModel):
     file_size_in_bytes: int = Field(..., alias='file-size-in-bytes')
 
 
-class BooleanTypeValue(RootModel[bool]):
-    root: bool = Field(..., examples=[True])
+class BooleanTypeValue(BaseModel):
+    __root__: bool = Field(..., example=True)
 
 
-class IntegerTypeValue(RootModel[int]):
-    root: int = Field(..., examples=[42])
+class IntegerTypeValue(BaseModel):
+    __root__: int = Field(..., example=42)
 
 
-class LongTypeValue(RootModel[int]):
-    root: int = Field(..., examples=[9223372036854775807])
+class LongTypeValue(BaseModel):
+    __root__: int = Field(..., example=9223372036854775807)
 
 
-class FloatTypeValue(RootModel[float]):
-    root: float = Field(..., examples=[3.14])
+class FloatTypeValue(BaseModel):
+    __root__: float = Field(..., example=3.14)
 
 
-class DoubleTypeValue(RootModel[float]):
-    root: float = Field(..., examples=[123.456])
+class DoubleTypeValue(BaseModel):
+    __root__: float = Field(..., example=123.456)
 
 
-class DecimalTypeValue(RootModel[str]):
-    root: str = Field(
+class DecimalTypeValue(BaseModel):
+    __root__: str = Field(
         ...,
         description="Decimal type values are serialized as strings. Decimals with a positive scale serialize as numeric plain text, while decimals with a negative scale use scientific notation and the exponent will be equal to the negated scale. For instance, a decimal with a positive scale is '123.4500', with zero scale is '2', and with a negative scale is '2E+20'",
-        examples=['123.4500'],
+        example='123.4500',
     )
 
 
-class StringTypeValue(RootModel[str]):
-    root: str = Field(..., examples=['hello'])
+class StringTypeValue(BaseModel):
+    __root__: str = Field(..., example='hello')
 
 
-class UUIDTypeValue(RootModel[UUID]):
-    root: UUID = Field(
+class UUIDTypeValue(BaseModel):
+    __root__: UUID = Field(
         ...,
         description='UUID type values are serialized as a 36-character lowercase string in standard UUID format as specified by RFC-4122',
-        examples=['eb26bdb1-a1d8-4aa6-990e-da940875492c'],
+        example='eb26bdb1-a1d8-4aa6-990e-da940875492c',
         max_length=36,
         min_length=36,
-        pattern='^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$',
+        regex='^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$',
     )
 
 
-class DateTypeValue(RootModel[date]):
-    root: date = Field(
+class DateTypeValue(BaseModel):
+    __root__: date = Field(
         ...,
         description="Date type values follow the 'YYYY-MM-DD' ISO-8601 standard date format",
-        examples=['2007-12-03'],
+        example='2007-12-03',
     )
 
 
-class TimeTypeValue(RootModel[str]):
-    root: str = Field(
+class TimeTypeValue(BaseModel):
+    __root__: str = Field(
         ...,
         description="Time type values follow the 'HH:MM:SS.ssssss' ISO-8601 format with microsecond precision",
-        examples=['22:31:08.123456'],
+        example='22:31:08.123456',
     )
 
 
-class TimestampTypeValue(RootModel[str]):
-    root: str = Field(
+class TimestampTypeValue(BaseModel):
+    __root__: str = Field(
         ...,
         description="Timestamp type values follow the 'YYYY-MM-DDTHH:MM:SS.ssssss' ISO-8601 format with microsecond precision",
-        examples=['2007-12-03T10:15:30.123456'],
+        example='2007-12-03T10:15:30.123456',
     )
 
 
-class TimestampTzTypeValue(RootModel[str]):
-    root: str = Field(
+class TimestampTzTypeValue(BaseModel):
+    __root__: str = Field(
         ...,
         description="TimestampTz type values follow the 'YYYY-MM-DDTHH:MM:SS.ssssss+00:00' ISO-8601 format with microsecond precision, and a timezone offset (+00:00 for UTC)",
-        examples=['2007-12-03T10:15:30.123456+00:00'],
+        example='2007-12-03T10:15:30.123456+00:00',
     )
 
 
-class TimestampNanoTypeValue(RootModel[str]):
-    root: str = Field(
+class TimestampNanoTypeValue(BaseModel):
+    __root__: str = Field(
         ...,
         description="Timestamp_ns type values follow the 'YYYY-MM-DDTHH:MM:SS.sssssssss' ISO-8601 format with nanosecond precision",
-        examples=['2007-12-03T10:15:30.123456789'],
+        example='2007-12-03T10:15:30.123456789',
     )
 
 
-class TimestampTzNanoTypeValue(RootModel[str]):
-    root: str = Field(
+class TimestampTzNanoTypeValue(BaseModel):
+    __root__: str = Field(
         ...,
         description="Timestamp_ns type values follow the 'YYYY-MM-DDTHH:MM:SS.sssssssss+00:00' ISO-8601 format with nanosecond precision, and a timezone offset (+00:00 for UTC)",
-        examples=['2007-12-03T10:15:30.123456789+00:00'],
+        example='2007-12-03T10:15:30.123456789+00:00',
     )
 
 
-class FixedTypeValue(RootModel[str]):
-    root: str = Field(
+class FixedTypeValue(BaseModel):
+    __root__: str = Field(
         ...,
         description='Fixed length type values are stored and serialized as an uppercase hexadecimal string preserving the fixed length',
-        examples=['78797A'],
+        example='78797A',
     )
 
 
-class BinaryTypeValue(RootModel[str]):
-    root: str = Field(
+class BinaryTypeValue(BaseModel):
+    __root__: str = Field(
         ...,
         description='Binary type values are stored and serialized as an uppercase hexadecimal string',
-        examples=['78797A'],
+        example='78797A',
     )
 
 
@@ -941,27 +900,8 @@ class CountMap(BaseModel):
     )
 
 
-class PrimitiveTypeValue(
-    RootModel[
-        BooleanTypeValue
-        | IntegerTypeValue
-        | LongTypeValue
-        | FloatTypeValue
-        | DoubleTypeValue
-        | DecimalTypeValue
-        | StringTypeValue
-        | UUIDTypeValue
-        | DateTypeValue
-        | TimeTypeValue
-        | TimestampTypeValue
-        | TimestampTzTypeValue
-        | TimestampNanoTypeValue
-        | TimestampTzNanoTypeValue
-        | FixedTypeValue
-        | BinaryTypeValue
-    ]
-):
-    root: (
+class PrimitiveTypeValue(BaseModel):
+    __root__: (
         BooleanTypeValue
         | IntegerTypeValue
         | LongTypeValue
@@ -981,8 +921,8 @@ class PrimitiveTypeValue(
     )
 
 
-class FileFormat(RootModel[Literal['avro', 'orc', 'parquet', 'puffin']]):
-    root: Literal['avro', 'orc', 'parquet', 'puffin']
+class FileFormat(BaseModel):
+    __root__: Literal['avro', 'orc', 'parquet', 'puffin']
 
 
 class ContentFile(BaseModel):
@@ -993,7 +933,7 @@ class ContentFile(BaseModel):
     partition: list[PrimitiveTypeValue] = Field(
         ...,
         description='A list of partition field values ordered based on the fields of the partition spec specified by the `spec-id`',
-        examples=[[1, 'bar']],
+        example=[1, 'bar'],
     )
     file_size_in_bytes: int = Field(
         ..., alias='file-size-in-bytes', description='Total file size in bytes'
@@ -1011,7 +951,7 @@ class ContentFile(BaseModel):
 
 
 class PositionDeleteFile(ContentFile):
-    content: Literal['position-deletes']
+    content: Literal['position-deletes'] = Field(..., const=True)
     content_offset: int | None = Field(
         None,
         alias='content-offset',
@@ -1025,21 +965,21 @@ class PositionDeleteFile(ContentFile):
 
 
 class EqualityDeleteFile(ContentFile):
-    content: Literal['equality-deletes']
+    content: Literal['equality-deletes'] = Field(..., const=True)
     equality_ids: list[int] | None = Field(
         None, alias='equality-ids', description='List of equality field IDs'
     )
 
 
-class FieldName(RootModel[str]):
-    root: str = Field(
+class FieldName(BaseModel):
+    __root__: str = Field(
         ...,
         description='A full field name (including parent field names), such as those passed in APIs like Java `Schema#findField(String name)`.\nThe nested field name follows these rules - Nested struct fields are named by concatenating field names at each struct level using dot (`.`) delimiter, e.g. employer.contact_info.address.zip_code - Nested fields in a map key are named using the keyword `key`, e.g. employee_address_map.key.first_name - Nested fields in a map value are named using the keyword `value`, e.g. employee_address_map.value.zip_code - Nested fields in a list are named using the keyword `element`, e.g. employees.element.first_name',
     )
 
 
-class PlanTask(RootModel[str]):
-    root: str = Field(
+class PlanTask(BaseModel):
+    __root__: str = Field(
         ...,
         description='An opaque string provided by the REST server that represents a unit of work to produce file scan tasks for scan planning. This allows clients to fetch tasks across multiple requests to accommodate large result sets.',
     )
@@ -1050,7 +990,7 @@ class CreateNamespaceRequest(BaseModel):
     properties: dict[str, str] | None = Field(
         {},
         description='Configured string to string map of properties for the namespace',
-        examples=[{'owner': 'Hank Bendickson'}],
+        example={'owner': 'Hank Bendickson'},
     )
 
 
@@ -1060,20 +1000,22 @@ class RenameTableRequest(BaseModel):
 
 
 class TransformTerm(BaseModel):
-    type: Literal['transform']
+    type: Literal['transform'] = Field('transform', const=True)
     transform: Transform
     term: Reference
 
 
 class SetPartitionStatisticsUpdate(BaseUpdate):
-    action: Literal['set-partition-statistics'] = 'set-partition-statistics'
+    action: Literal['set-partition-statistics'] = Field(
+        'set-partition-statistics', const=True
+    )
     partition_statistics: PartitionStatisticsFile = Field(
         ..., alias='partition-statistics'
     )
 
 
-class ViewRequirement(RootModel[AssertViewUUID]):
-    root: AssertViewUUID = Field(..., discriminator='type')
+class ViewRequirement(BaseModel):
+    __root__: AssertViewUUID = Field(..., discriminator='type')
 
 
 class FailedPlanningResult(IcebergErrorResponse):
@@ -1081,9 +1023,7 @@ class FailedPlanningResult(IcebergErrorResponse):
     Failed server-side planning result
     """
 
-    status: Literal['failed'] = Field(
-        ..., description='Status of a server-side planning operation'
-    )
+    status: Literal['failed'] = Field(..., const=True)
 
 
 class ReportMetricsRequest2(CommitReport):
@@ -1108,7 +1048,7 @@ class ValueMap(BaseModel):
 
 
 class DataFile(ContentFile):
-    content: Literal['data']
+    content: Literal['data'] = Field(..., const=True)
     first_row_id: int | None = Field(
         None,
         alias='first-row-id',
@@ -1144,20 +1084,22 @@ class DataFile(ContentFile):
     )
 
 
-class DeleteFile(RootModel[PositionDeleteFile | EqualityDeleteFile]):
-    root: PositionDeleteFile | EqualityDeleteFile = Field(..., discriminator='content')
+class DeleteFile(BaseModel):
+    __root__: PositionDeleteFile | EqualityDeleteFile = Field(
+        ..., discriminator='content'
+    )
 
 
 class FetchScanTasksRequest(BaseModel):
     plan_task: PlanTask = Field(..., alias='plan-task')
 
 
-class Term(RootModel[Reference | TransformTerm]):
-    root: Reference | TransformTerm
+class Term(BaseModel):
+    __root__: Reference | TransformTerm
 
 
 class SetStatisticsUpdate(BaseUpdate):
-    action: Literal['set-statistics'] = 'set-statistics'
+    action: Literal['set-statistics'] = Field('set-statistics', const=True)
     snapshot_id: int | None = Field(
         None,
         alias='snapshot-id',
@@ -1168,95 +1110,20 @@ class SetStatisticsUpdate(BaseUpdate):
 
 
 class UnaryExpression(BaseModel):
-    type: Literal['is-null', 'not-null', 'is-nan', 'not-nan'] = Field(
-        ...,
-        examples=[
-            [
-                'true',
-                'false',
-                'eq',
-                'and',
-                'or',
-                'not',
-                'in',
-                'not-in',
-                'lt',
-                'lt-eq',
-                'gt',
-                'gt-eq',
-                'not-eq',
-                'starts-with',
-                'not-starts-with',
-                'is-null',
-                'not-null',
-                'is-nan',
-                'not-nan',
-            ]
-        ],
-    )
+    type: Literal['is-null', 'not-null', 'is-nan', 'not-nan']
     term: Term
 
 
 class LiteralExpression(BaseModel):
     type: Literal[
         'lt', 'lt-eq', 'gt', 'gt-eq', 'eq', 'not-eq', 'starts-with', 'not-starts-with'
-    ] = Field(
-        ...,
-        examples=[
-            [
-                'true',
-                'false',
-                'eq',
-                'and',
-                'or',
-                'not',
-                'in',
-                'not-in',
-                'lt',
-                'lt-eq',
-                'gt',
-                'gt-eq',
-                'not-eq',
-                'starts-with',
-                'not-starts-with',
-                'is-null',
-                'not-null',
-                'is-nan',
-                'not-nan',
-            ]
-        ],
-    )
+    ]
     term: Term
     value: PrimitiveTypeValue
 
 
 class SetExpression(BaseModel):
-    type: Literal['in', 'not-in'] = Field(
-        ...,
-        examples=[
-            [
-                'true',
-                'false',
-                'eq',
-                'and',
-                'or',
-                'not',
-                'in',
-                'not-in',
-                'lt',
-                'lt-eq',
-                'gt',
-                'gt-eq',
-                'not-eq',
-                'starts-with',
-                'not-starts-with',
-                'is-null',
-                'not-null',
-                'is-nan',
-                'not-nan',
-            ]
-        ],
-    )
+    type: Literal['in', 'not-in']
     term: Term
     values: list[PrimitiveTypeValue]
 
@@ -1272,19 +1139,19 @@ class StructField(BaseModel):
 
 
 class StructType(BaseModel):
-    type: Literal['struct']
+    type: Literal['struct'] = Field('struct', const=True)
     fields: list[StructField]
 
 
 class ListType(BaseModel):
-    type: Literal['list']
+    type: Literal['list'] = Field('list', const=True)
     element_id: int = Field(..., alias='element-id')
     element: Type
     element_required: bool = Field(..., alias='element-required')
 
 
 class MapType(BaseModel):
-    type: Literal['map']
+    type: Literal['map'] = Field('map', const=True)
     key_id: int = Field(..., alias='key-id')
     key: Type
     value_id: int = Field(..., alias='value-id')
@@ -1292,64 +1159,30 @@ class MapType(BaseModel):
     value_required: bool = Field(..., alias='value-required')
 
 
-class AndOrExpression(BaseModel):
-    type: Literal['and', 'or'] = Field(
-        ...,
-        examples=[
-            [
-                'true',
-                'false',
-                'eq',
-                'and',
-                'or',
-                'not',
-                'in',
-                'not-in',
-                'lt',
-                'lt-eq',
-                'gt',
-                'gt-eq',
-                'not-eq',
-                'starts-with',
-                'not-starts-with',
-                'is-null',
-                'not-null',
-                'is-nan',
-                'not-nan',
-            ]
-        ],
+class Type(BaseModel):
+    __root__: PrimitiveType | StructType | ListType | MapType
+
+
+class Expression(BaseModel):
+    __root__: (
+        TrueExpression
+        | FalseExpression
+        | AndOrExpression
+        | NotExpression
+        | SetExpression
+        | LiteralExpression
+        | UnaryExpression
     )
+
+
+class AndOrExpression(BaseModel):
+    type: Literal['and', 'or']
     left: Expression
     right: Expression
 
 
 class NotExpression(BaseModel):
-    type: Literal['not'] = Field(
-        ...,
-        examples=[
-            [
-                'true',
-                'false',
-                'eq',
-                'and',
-                'or',
-                'not',
-                'in',
-                'not-in',
-                'lt',
-                'lt-eq',
-                'gt',
-                'gt-eq',
-                'not-eq',
-                'starts-with',
-                'not-starts-with',
-                'is-null',
-                'not-null',
-                'is-nan',
-                'not-nan',
-            ]
-        ],
-    )
+    type: Literal['not'] = Field('not', const=True)
     child: Expression
 
 
@@ -1397,13 +1230,54 @@ class ViewMetadata(BaseModel):
 
 
 class AddSchemaUpdate(BaseUpdate):
-    action: Literal['add-schema'] = 'add-schema'
+    action: Literal['add-schema'] = Field('add-schema', const=True)
     schema_: Schema = Field(..., alias='schema')
     last_column_id: int | None = Field(
         None,
         alias='last-column-id',
         deprecated=True,
         description="This optional field is **DEPRECATED for REMOVAL** since it more safe to handle this internally, and shouldn't be exposed to the clients.\nThe highest assigned column ID for the table. This is used to ensure columns are always assigned an unused ID when evolving schemas. When omitted, it will be computed on the server side.",
+    )
+
+
+class TableUpdate(BaseModel):
+    __root__: (
+        AssignUUIDUpdate
+        | UpgradeFormatVersionUpdate
+        | AddSchemaUpdate
+        | SetCurrentSchemaUpdate
+        | AddPartitionSpecUpdate
+        | SetDefaultSpecUpdate
+        | AddSortOrderUpdate
+        | SetDefaultSortOrderUpdate
+        | AddSnapshotUpdate
+        | SetSnapshotRefUpdate
+        | RemoveSnapshotsUpdate
+        | RemoveSnapshotRefUpdate
+        | SetLocationUpdate
+        | SetPropertiesUpdate
+        | RemovePropertiesUpdate
+        | SetStatisticsUpdate
+        | RemoveStatisticsUpdate
+        | SetPartitionStatisticsUpdate
+        | RemovePartitionStatisticsUpdate
+        | RemovePartitionSpecsUpdate
+        | RemoveSchemasUpdate
+        | AddEncryptionKeyUpdate
+        | RemoveEncryptionKeyUpdate
+    )
+
+
+class ViewUpdate(BaseModel):
+    __root__: (
+        AssignUUIDUpdate
+        | UpgradeFormatVersionUpdate
+        | AddSchemaUpdate
+        | SetLocationUpdate
+        | SetPropertiesUpdate
+        | RemovePropertiesUpdate
+        | AddViewVersionUpdate
+        | SetCurrentViewVersionUpdate
     )
 
 
@@ -1478,6 +1352,29 @@ class ScanTasks(BaseModel):
     )
     file_scan_tasks: list[FileScanTask] | None = Field(None, alias='file-scan-tasks')
     plan_tasks: list[PlanTask] | None = Field(None, alias='plan-tasks')
+
+
+class FetchPlanningResult(BaseModel):
+    __root__: CompletedPlanningResult | FailedPlanningResult | EmptyPlanningResult = (
+        Field(
+            ...,
+            description='Result of server-side scan planning for fetchPlanningResult',
+            discriminator='status',
+        )
+    )
+
+
+class PlanTableScanResult(BaseModel):
+    __root__: (
+        CompletedPlanningWithIDResult
+        | FailedPlanningResult
+        | AsyncPlanningResult
+        | EmptyPlanningResult
+    ) = Field(
+        ...,
+        description='Result of server-side scan planning for planTableScan',
+        discriminator='status',
+    )
 
 
 class CommitTableRequest(BaseModel):
@@ -1555,6 +1452,10 @@ class LoadViewResult(BaseModel):
     config: dict[str, str] | None = None
 
 
+class ReportMetricsRequest(BaseModel):
+    __root__: ReportMetricsRequest1 | ReportMetricsRequest2
+
+
 class ScanReport(BaseModel):
     table_name: str = Field(..., alias='table-name')
     snapshot_id: int = Field(..., alias='snapshot-id')
@@ -1569,6 +1470,9 @@ class ScanReport(BaseModel):
 class CommitTableResponse(BaseModel):
     metadata_location: str = Field(..., alias='metadata-location')
     metadata: TableMetadata
+    storage_credentials: list[StorageCredential] | None = Field(
+        None, alias='storage-credentials'
+    )
 
 
 class PlanTableScanRequest(BaseModel):
@@ -1634,118 +1538,12 @@ class Schema(StructType):
     identifier_field_ids: list[int] | None = Field(None, alias='identifier-field-ids')
 
 
-class Type(RootModel[PrimitiveType | StructType | ListType | MapType]):
-    root: PrimitiveType | StructType | ListType | MapType
-
-
-class Expression(
-    RootModel[
-        TrueExpression
-        | FalseExpression
-        | AndOrExpression
-        | NotExpression
-        | SetExpression
-        | LiteralExpression
-        | UnaryExpression
-    ]
-):
-    root: (
-        TrueExpression
-        | FalseExpression
-        | AndOrExpression
-        | NotExpression
-        | SetExpression
-        | LiteralExpression
-        | UnaryExpression
-    )
-
-
-class TableUpdate(
-    RootModel[
-        AssignUUIDUpdate
-        | UpgradeFormatVersionUpdate
-        | AddSchemaUpdate
-        | SetCurrentSchemaUpdate
-        | AddPartitionSpecUpdate
-        | SetDefaultSpecUpdate
-        | AddSortOrderUpdate
-        | SetDefaultSortOrderUpdate
-        | AddSnapshotUpdate
-        | SetSnapshotRefUpdate
-        | RemoveSnapshotsUpdate
-        | RemoveSnapshotRefUpdate
-        | SetLocationUpdate
-        | SetPropertiesUpdate
-        | RemovePropertiesUpdate
-        | SetStatisticsUpdate
-        | RemoveStatisticsUpdate
-        | SetPartitionStatisticsUpdate
-        | RemovePartitionStatisticsUpdate
-        | RemovePartitionSpecsUpdate
-        | RemoveSchemasUpdate
-        | AddEncryptionKeyUpdate
-        | RemoveEncryptionKeyUpdate
-    ]
-):
-    root: (
-        AssignUUIDUpdate
-        | UpgradeFormatVersionUpdate
-        | AddSchemaUpdate
-        | SetCurrentSchemaUpdate
-        | AddPartitionSpecUpdate
-        | SetDefaultSpecUpdate
-        | AddSortOrderUpdate
-        | SetDefaultSortOrderUpdate
-        | AddSnapshotUpdate
-        | SetSnapshotRefUpdate
-        | RemoveSnapshotsUpdate
-        | RemoveSnapshotRefUpdate
-        | SetLocationUpdate
-        | SetPropertiesUpdate
-        | RemovePropertiesUpdate
-        | SetStatisticsUpdate
-        | RemoveStatisticsUpdate
-        | SetPartitionStatisticsUpdate
-        | RemovePartitionStatisticsUpdate
-        | RemovePartitionSpecsUpdate
-        | RemoveSchemasUpdate
-        | AddEncryptionKeyUpdate
-        | RemoveEncryptionKeyUpdate
-    )
-
-
-class ViewUpdate(
-    RootModel[
-        AssignUUIDUpdate
-        | UpgradeFormatVersionUpdate
-        | AddSchemaUpdate
-        | SetLocationUpdate
-        | SetPropertiesUpdate
-        | RemovePropertiesUpdate
-        | AddViewVersionUpdate
-        | SetCurrentViewVersionUpdate
-    ]
-):
-    root: (
-        AssignUUIDUpdate
-        | UpgradeFormatVersionUpdate
-        | AddSchemaUpdate
-        | SetLocationUpdate
-        | SetPropertiesUpdate
-        | RemovePropertiesUpdate
-        | AddViewVersionUpdate
-        | SetCurrentViewVersionUpdate
-    )
-
-
 class CompletedPlanningResult(ScanTasks):
     """
     Completed server-side planning result
     """
 
-    status: Literal['completed'] = Field(
-        ..., description='Status of a server-side planning operation'
-    )
+    status: Literal['completed'] = Field(..., const=True)
     storage_credentials: list[StorageCredential] | None = Field(
         None,
         alias='storage-credentials',
@@ -1770,57 +1568,19 @@ class CompletedPlanningWithIDResult(CompletedPlanningResult):
     status: Literal['completed']
 
 
-class FetchPlanningResult(
-    RootModel[CompletedPlanningResult | FailedPlanningResult | EmptyPlanningResult]
-):
-    root: CompletedPlanningResult | FailedPlanningResult | EmptyPlanningResult = Field(
-        ...,
-        description='Result of server-side scan planning for fetchPlanningResult',
-        discriminator='status',
-    )
-
-
-class ReportMetricsRequest(RootModel[ReportMetricsRequest1 | ReportMetricsRequest2]):
-    root: ReportMetricsRequest1 | ReportMetricsRequest2
-
-
-class PlanTableScanResult(
-    RootModel[
-        CompletedPlanningWithIDResult
-        | FailedPlanningResult
-        | AsyncPlanningResult
-        | EmptyPlanningResult
-    ]
-):
-    root: (
-        CompletedPlanningWithIDResult
-        | FailedPlanningResult
-        | AsyncPlanningResult
-        | EmptyPlanningResult
-    ) = Field(
-        ...,
-        description='Result of server-side scan planning for planTableScan',
-        discriminator='status',
-    )
-
-
-StructField.model_rebuild()
-ListType.model_rebuild()
-MapType.model_rebuild()
-AndOrExpression.model_rebuild()
-NotExpression.model_rebuild()
-TableMetadata.model_rebuild()
-ViewMetadata.model_rebuild()
-AddSchemaUpdate.model_rebuild()
-ScanTasks.model_rebuild()
-CommitTableRequest.model_rebuild()
-CommitViewRequest.model_rebuild()
-CreateTableRequest.model_rebuild()
-CreateViewRequest.model_rebuild()
-ScanReport.model_rebuild()
-PlanTableScanRequest.model_rebuild()
-FileScanTask.model_rebuild()
-CompletedPlanningResult.model_rebuild()
-FetchScanTasksResult.model_rebuild()
-ReportMetricsRequest1.model_rebuild()
-CompletedPlanningWithIDResult.model_rebuild()
+StructField.update_forward_refs()
+ListType.update_forward_refs()
+MapType.update_forward_refs()
+Expression.update_forward_refs()
+TableMetadata.update_forward_refs()
+ViewMetadata.update_forward_refs()
+AddSchemaUpdate.update_forward_refs()
+ScanTasks.update_forward_refs()
+FetchPlanningResult.update_forward_refs()
+PlanTableScanResult.update_forward_refs()
+CreateTableRequest.update_forward_refs()
+CreateViewRequest.update_forward_refs()
+ReportMetricsRequest.update_forward_refs()
+CompletedPlanningResult.update_forward_refs()
+FetchScanTasksResult.update_forward_refs()
+CompletedPlanningWithIDResult.update_forward_refs()

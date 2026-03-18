@@ -4221,6 +4221,10 @@ components:
           type: string
         metadata:
           $ref: '#/components/schemas/TableMetadata'
+        storage-credentials:
+          type: array
+          items:
+            $ref: '#/components/schemas/StorageCredential'
 
     StatisticsFile:
       type: object
@@ -4962,6 +4966,8 @@ components:
         Response used when a table is successfully updated.
 
         The table metadata JSON is returned in the metadata field. The corresponding file location of table metadata must be returned in the metadata-location field. Clients can check whether metadata has changed by comparing metadata locations.
+
+        Storage credentials for the updated table may be returned in the storage-credentials field. Clients should update storage credentials if new credentials are provided to ensure future access to storage.
       content:
         application/json:
           schema:
